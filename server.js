@@ -48,7 +48,7 @@ app.get('/health', (req, res) => res.json({ status: 'ok' }));
 // Login de usuário (cliente)
 app.post('/api/auth/login', async (req, res) => {
   try {
-    const { code, user } = req.body;
+    const { code, user, senha } = req.body;
     if (!code || !user) return res.status(400).json({ error: 'Dados incompletos' });
 
     const labs = await sb(`laboratorios?codigo=eq.${encodeURIComponent(code.toUpperCase())}&ativo=eq.true`);
@@ -59,6 +59,28 @@ app.post('/api/auth/login', async (req, res) => {
     if (!users.length) return res.status(401).json({ error: 'Usuário não encontrado' });
     const userObj = users[0];
 
+    // Se senha foi enviada, verificar no backend
+    if (senha) {
+      const hash = userObj.senha;
+      let senhaOk = false;
+      if (hash && hash.startsWith('$2')) {
+        senhaOk = await bcrypt.compare(senha, hash);
+      } else {
+        // senha em texto puro (legado)
+        senhaOk = (senha === hash);
+      }
+      if (!senhaOk) return res.status(401).json({ error: 'Senha incorreta' });
+      // Migrar senha para hash se ainda for texto puro
+      if (hash && !hash.startsWith('$2')) {
+        const novoHash = await bcrypt.hash(senha, 10);
+        await sb(`usuarios?id=eq.${userObj.id}`, {
+          method: 'PATCH', body: JSON.stringify({ senha: novoHash }), prefer: 'return=minimal'
+        });
+      }
+      return res.json({ lab, user: userObj });
+    }
+
+    // Compatibilidade: retornar hash para verificação no frontend (legado)
     res.json({ lab, user: userObj, senhaHash: userObj.senha });
   } catch (e) {
     res.status(500).json({ error: e.message });
