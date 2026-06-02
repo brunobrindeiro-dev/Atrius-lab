@@ -59,8 +59,8 @@ app.post('/api/auth/login', async (req, res) => {
     if (!users.length) return res.status(401).json({ error: 'Usuário não encontrado' });
     const userObj = users[0];
 
-    // Se senha foi enviada, verificar no backend
-    if (senha) {
+    // Se senha foi enviada (não null/undefined/vazio), verificar no backend
+    if (senha && senha !== 'null') {
       const hash = userObj.senha;
       let senhaOk = false;
       if (hash && hash.startsWith('$2')) {
