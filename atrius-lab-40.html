@@ -2442,26 +2442,13 @@ async function doLogin(silent = false) {
       return;
     }
 
-    // Login via backend seguro (SUPA_KEY nunca exposta no front)
+    // Login via backend — verificação de senha feita no servidor
     const loginData = await apiFetch('auth/login', {
       method: 'POST',
-      body: JSON.stringify({ code, user })
+      body: JSON.stringify({ code, user, senha: pass })
     });
     const lab     = loginData.lab;
     const userObj = loginData.user;
-
-    // Verificar senha localmente com bcrypt (hash retornado só para este fim)
-    const senhaOk = await verificarSenha(pass, loginData.senhaHash);
-    if (!senhaOk) throw new Error('Senha incorreta');
-
-    // Se senha ainda era texto puro, migrar para hash via backend
-    if (!loginData.senhaHash.startsWith('$2')) {
-      const hashed = await hashSenha(pass);
-      await apiFetch('auth/migrar-senha', {
-        method: 'PATCH',
-        body: JSON.stringify({ userId: userObj.id, senhaHash: hashed })
-      });
-    }
 
     // Registrar sessão nos headers de todas as chamadas futuras
     setSessionHeaders(lab.id, userObj.id);
