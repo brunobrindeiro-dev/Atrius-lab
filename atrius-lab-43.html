@@ -2083,7 +2083,7 @@ tbody tr:hover{background:#f8fafb;}
 <div class="modal-overlay" id="colaboradorOverlay" onclick="if(event.target===this)fecharColaborador()" style="display:none;align-items:center;justify-content:center;padding:20px">
   <div class="modal" style="max-width:480px">
     <div class="modal-head">
-      <div class="modal-title">👤 Novo Colaborador</div>
+      <div class="modal-title" id="colaboradorModalTitle">👤 Novo Colaborador</div>
       <button class="modal-close" onclick="fecharColaborador()">✕</button>
     </div>
     <div class="modal-body">
@@ -2153,8 +2153,9 @@ tbody tr:hover{background:#f8fafb;}
       </div>
     </div>
     <div class="modal-footer">
+      <input type="hidden" id="colId"/>
       <button class="btn-cancel" onclick="fecharColaborador()">Cancelar</button>
-      <button class="btn-save" onclick="salvarColaborador()">Salvar Colaborador</button>
+      <button class="btn-save" id="colaboradorSaveBtn" onclick="salvarColaborador()">Salvar Colaborador</button>
     </div>
   </div>
 </div>
@@ -2642,7 +2643,7 @@ async function salvarMovimentacao(entry) {
         item_id:      entry.itemId || null,
         tipo:         entry.type,
         quantidade:   entry.qty,
-        responsavel:  entry.user || currentUser,
+        responsavel:  entry.user || currentUserLogin || currentUser,
         motivo:       entry.motivo || null,
         nota_fiscal:  entry.nf || null,
         observacoes:  entry.obs || null,
@@ -2741,7 +2742,7 @@ async function logMovimento(entry) {
     ...entry,
     date: now.toLocaleDateString('pt-BR'),
     time: now.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}),
-    user: entry.user || currentUser || 'Sistema',
+    user: entry.user || currentUserLogin || currentUser || 'Sistema',
     id:   Date.now(),
   };
   historicoLog.push(log);
@@ -4617,43 +4618,95 @@ function abrirNovoColaborador() {
   ['colNome','colUser','colEmail','colTelefone','colSenha'].forEach(id => {
     const el = document.getElementById(id); if(el) el.value = '';
   });
+  document.getElementById('colId').value = '';
+  document.getElementById('colCargo').value = 'Operador';
+  document.getElementById('permEntrada').checked = true;
+  document.getElementById('permSaida').checked = true;
+  document.getElementById('permRelatorio').checked = false;
+  document.getElementById('permEditar').checked = true;
+  document.getElementById('permExcluir').checked = false;
+  document.getElementById('colaboradorModalTitle').textContent = '👤 Novo Colaborador';
+  document.getElementById('colaboradorSaveBtn').textContent = 'Salvar Colaborador';
+  const senhaGroup = document.getElementById('colSenha').closest('.mform-group');
+  if (senhaGroup) senhaGroup.style.display = '';
   document.getElementById('colaboradorOverlay').style.display = 'flex';
+}
+
+async function editarColaborador(id) {
+  try {
+    const users = await sbFetch(`usuarios?id=eq.${id}`);
+    if (!users.length) return;
+    const u = users[0];
+    document.getElementById('colId').value    = u.id;
+    document.getElementById('colNome').value  = u.nome || '';
+    document.getElementById('colUser').value  = u.usuario || '';
+    document.getElementById('colEmail').value = u.email || '';
+    document.getElementById('colTelefone').value = u.telefone ? u.telefone.replace(/^55/,'') : '';
+    document.getElementById('colSenha').value = '';
+    document.getElementById('colCargo').value = u.cargo || 'Operador';
+    document.getElementById('permEditar').checked   = u.perm_editar  !== false;
+    document.getElementById('permExcluir').checked  = u.perm_excluir === true;
+    document.getElementById('permEntrada').checked  = true;
+    document.getElementById('permSaida').checked    = true;
+    document.getElementById('permRelatorio').checked = false;
+    document.getElementById('colaboradorModalTitle').textContent = '✏️ Editar Colaborador';
+    document.getElementById('colaboradorSaveBtn').textContent = 'Salvar Alterações';
+    // Ocultar campo de senha (opcional na edição)
+    const senhaGroup = document.getElementById('colSenha').closest('.mform-group');
+    if (senhaGroup) {
+      senhaGroup.innerHTML = `<label class="mform-label">Nova senha <span style="color:var(--gray4);font-weight:400">(deixe em branco para manter)</span></label><input class="mform-input" id="colSenha" type="password" placeholder="Mínimo 6 caracteres"/>`;
+    }
+    document.getElementById('colaboradorOverlay').style.display = 'flex';
+  } catch(e) { alert('Erro ao carregar dados do colaborador.'); }
 }
 function fecharColaborador() {
   document.getElementById('colaboradorOverlay').style.display = 'none';
 }
 async function salvarColaborador() {
+  const colId = document.getElementById('colId').value;
+  const isEdit = !!colId;
   const nome  = document.getElementById('colNome').value.trim();
   const user  = document.getElementById('colUser').value.trim();
   const email = document.getElementById('colEmail').value.trim();
   const senha = document.getElementById('colSenha').value;
   const cargo = document.getElementById('colCargo').value;
-  if (!nome || !user || !senha) { alert('Preencha nome, usuário e senha.'); return; }
+  const permEditar  = document.getElementById('permEditar')  ? document.getElementById('permEditar').checked  : true;
+  const permExcluir = document.getElementById('permExcluir') ? document.getElementById('permExcluir').checked : false;
+  const telefone = document.getElementById('colTelefone').value.trim() ? '55' + document.getElementById('colTelefone').value.trim().replace(/\D/g,'') : null;
+
+  if (!nome || !user) { alert('Preencha nome e usuário.'); return; }
   if (!email) { alert('O e-mail é obrigatório.'); return; }
-  if (senha.length < 6) { alert('A senha deve ter pelo menos 6 caracteres.'); return; }
+  if (!isEdit && !senha) { alert('Preencha a senha.'); return; }
+  if (senha && senha.length < 6) { alert('A senha deve ter pelo menos 6 caracteres.'); return; }
 
   try {
-    const senhaHash = await hashSenha(senha);
-    const permEditar  = document.getElementById('permEditar')  ? document.getElementById('permEditar').checked  : document.getElementById('permEntrada').checked;
-    const permExcluir = document.getElementById('permExcluir') ? document.getElementById('permExcluir').checked : false;
-    await sbFetch('usuarios', {
-      method: 'POST',
-      body: JSON.stringify({
-        lab_id: currentLab.id,
-        nome, usuario: user.toLowerCase(),
-        email, telefone: document.getElementById('colTelefone').value.trim() ? '55' + document.getElementById('colTelefone').value.trim().replace(/\D/g,'') : null,
-        senha: senhaHash, cargo, ativo: true,
-        perm_editar: permEditar,
-        perm_excluir: permExcluir
-      })
-    });
-    // Enviar e-mail de boas-vindas
-    await enviarEmailBoasVindas(email, nome, user, senha, currentLab.nome);
-    showToast(`✅ Colaborador ${nome} cadastrado! E-mail de boas-vindas enviado.`);
+    if (isEdit) {
+      // Edição: atualizar dados (sem senha se deixou em branco)
+      const body = { nome, usuario: user.toLowerCase(), email, telefone, cargo, perm_editar: permEditar, perm_excluir: permExcluir };
+      if (senha) body.senha = await hashSenha(senha);
+      await sbFetch(`usuarios?id=eq.${colId}`, { method: 'PATCH', body: JSON.stringify(body) });
+      showToast(`✅ Colaborador ${nome} atualizado com sucesso!`);
+    } else {
+      // Novo colaborador
+      const senhaHash = await hashSenha(senha);
+      await sbFetch('usuarios', {
+        method: 'POST',
+        body: JSON.stringify({
+          lab_id: currentLab.id,
+          nome, usuario: user.toLowerCase(),
+          email, telefone,
+          senha: senhaHash, cargo, ativo: true,
+          perm_editar: permEditar,
+          perm_excluir: permExcluir
+        })
+      });
+      await enviarEmailBoasVindas(email, nome, user, senha, currentLab.nome);
+      showToast(`✅ Colaborador ${nome} cadastrado! E-mail de boas-vindas enviado.`);
+    }
     fecharColaborador();
     renderEquipe();
   } catch(e) {
-    alert('Erro ao salvar colaborador. O usuário já pode existir.');
+    alert(isEdit ? 'Erro ao atualizar colaborador.' : 'Erro ao salvar colaborador. O usuário já pode existir.');
   }
 }
 async function renderEquipe() {
@@ -4679,6 +4732,9 @@ async function renderEquipe() {
             ${u.ativo?'Ativo':'Inativo'}
           </span>
           ${currentUserCargo === 'Administrador' ? `
+          <button onclick="editarColaborador('${u.id}')" style="padding:5px 10px;border-radius:6px;border:1px solid var(--gray2);background:white;cursor:pointer;font-size:0.72rem;color:var(--teal)">
+            ✏️ Editar
+          </button>
           <button onclick="toggleColaborador('${u.id}',${u.ativo})" style="padding:5px 10px;border-radius:6px;border:1px solid var(--gray2);background:white;cursor:pointer;font-size:0.72rem;color:var(--gray4)">
             ${u.ativo?'Suspender':'Reativar'}
           </button>
@@ -4706,7 +4762,8 @@ async function excluirColaborador(id, nome) {
     renderEquipe();
   } catch(e) { alert('Erro ao excluir colaborador.'); }
 }
-window.excluirColaborador = excluirColaborador;
+window.excluirColaborador   = excluirColaborador;
+window.editarColaborador    = editarColaborador;
 window.abrirNovoColaborador = abrirNovoColaborador;
 window.fecharColaborador    = fecharColaborador;
 window.salvarColaborador    = salvarColaborador;
