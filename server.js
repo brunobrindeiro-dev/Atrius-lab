@@ -165,6 +165,8 @@ app.patch('/api/estoque/:id', async (req, res) => {
 app.delete('/api/estoque/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    // Excluir movimentações vinculadas antes de excluir o item
+    await sb(`movimentacoes?item_id=eq.${id}`, { method: 'DELETE', prefer: 'return=minimal' });
     await sb(`estoque?id=eq.${id}`, { method: 'DELETE', prefer: 'return=minimal' });
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
