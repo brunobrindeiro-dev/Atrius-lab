@@ -193,9 +193,19 @@ app.get('/api/movimentacoes', async (req, res) => {
   try {
     const labId = req.headers['x-lab-id'];
     if (!labId) return res.status(400).json({ error: 'lab_id obrigatório' });
-    const limit = req.query.limit || 200;
+    const limit = req.query.limit || 1000;
     const data = await sb(`movimentacoes?lab_id=eq.${labId}&order=criado_em.desc&limit=${limit}`);
     res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Diagnóstico — conta total de movimentações do lab
+app.get('/api/movimentacoes/count', async (req, res) => {
+  try {
+    const labId = req.headers['x-lab-id'];
+    if (!labId) return res.status(400).json({ error: 'lab_id obrigatório' });
+    const data = await sb(`movimentacoes?lab_id=eq.${labId}&select=id`);
+    res.json({ count: data.length, lab_id: labId });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
