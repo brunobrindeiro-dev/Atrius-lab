@@ -176,6 +176,19 @@ app.delete('/api/estoque/:id', async (req, res) => {
 // MOVIMENTAÇÕES
 // ══════════════════════════════════════════
 
+app.get('/api/movimentacoes/transferencias', async (req, res) => {
+  try {
+    const labId = req.headers['x-lab-id'];
+    if (!labId) return res.status(400).json({ error: 'lab_id obrigatório' });
+    const unidadeId = req.query.unidade_id;
+    const path = unidadeId
+      ? `movimentacoes?lab_id=eq.${labId}&tipo=eq.transferencia&unidade_id=eq.${unidadeId}&order=criado_em.desc`
+      : `movimentacoes?lab_id=eq.${labId}&tipo=eq.transferencia&order=criado_em.desc`;
+    const data = await sb(path);
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/movimentacoes', async (req, res) => {
   try {
     const labId = req.headers['x-lab-id'];
@@ -423,6 +436,42 @@ app.delete('/api/unidades/:id', async (req, res) => {
       method: 'PATCH', body: JSON.stringify({ ativo: false }), prefer: 'return=minimal'
     });
     res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ══════════════════════════════════════════
+// ESTOQUE UNIDADES
+// ══════════════════════════════════════════
+
+app.get('/api/estoque_unidades', async (req, res) => {
+  try {
+    const labId = req.headers['x-lab-id'];
+    if (!labId) return res.status(400).json({ error: 'lab_id obrigatório' });
+    const unidadeId = req.query.unidade_id;
+    const path = unidadeId
+      ? `estoque_unidades?lab_id=eq.${labId}&unidade_id=eq.${unidadeId}&ativo=eq.true&order=confirmado_em.desc`
+      : `estoque_unidades?lab_id=eq.${labId}&ativo=eq.true&order=confirmado_em.desc`;
+    const data = await sb(path);
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/estoque_unidades', async (req, res) => {
+  try {
+    const labId = req.headers['x-lab-id'];
+    const body = { ...req.body, lab_id: labId };
+    const data = await sb('estoque_unidades', { method: 'POST', body: JSON.stringify(body) });
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/estoque_unidades/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = await sb(`estoque_unidades?id=eq.${id}`, {
+      method: 'PATCH', body: JSON.stringify(req.body), prefer: 'return=representation'
+    });
+    res.json(data);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
