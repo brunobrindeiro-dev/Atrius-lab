@@ -384,6 +384,49 @@ app.get('/api/admin/movimentacoes', requireGestor, async (req, res) => {
 });
 
 // ══════════════════════════════════════════
+// UNIDADES / FILIAIS
+// ══════════════════════════════════════════
+
+app.get('/api/unidades', async (req, res) => {
+  try {
+    const labId = req.headers['x-lab-id'];
+    if (!labId) return res.status(400).json({ error: 'lab_id obrigatório' });
+    const data = await sb(`unidades?lab_id=eq.${labId}&ativo=eq.true&order=nome.asc`);
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/unidades', async (req, res) => {
+  try {
+    const labId = req.headers['x-lab-id'];
+    const body = { ...req.body, lab_id: labId };
+    const data = await sb('unidades', { method: 'POST', body: JSON.stringify(body) });
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/unidades/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = await sb(`unidades?id=eq.${id}`, {
+      method: 'PATCH', body: JSON.stringify(req.body), prefer: 'return=representation'
+    });
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/unidades/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Nunca deletar — apenas desativar para preservar histórico
+    await sb(`unidades?id=eq.${id}`, {
+      method: 'PATCH', body: JSON.stringify({ ativo: false }), prefer: 'return=minimal'
+    });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ══════════════════════════════════════════
 // EMAIL (Resend)
 // ══════════════════════════════════════════
 
